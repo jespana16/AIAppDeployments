@@ -5,7 +5,7 @@ const multer = require("multer");
 const upload = multer();
 const GoogleAPI = require("./GoogleApi");
 
-process.env["GOOGLE_APPLICATION_CREDENTIALS"] = "Z:/ProyectosTrabajos/UAO/Posgrado/Deployments/facerecognitionappjespanagmail-f51ac2294532.json";
+// process.env["GOOGLE_APPLICATION_CREDENTIALS"] = "Z:/ProyectosTrabajos/UAO/Posgrado/Deployments/facerecognitionappjespanagmail-f51ac2294532.json";
 
 const publicFolder = path.join(__dirname, "public");
 app.use("/public", express.static(publicFolder));
