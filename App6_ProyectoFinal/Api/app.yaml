@@ -1,0 +1,6 @@
+runtime: python38
+
+handlers:
+  static_dir: static
+  url: /.*
+  script: auto
