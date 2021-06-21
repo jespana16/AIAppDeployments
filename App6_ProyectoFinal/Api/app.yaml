@@ -1,6 +1,3 @@
 runtime: python38
-
-handlers:
-  static_dir: static
-  url: /.*
-  script: auto
+instance_class: F4_1G
+entrypoint: gunicorn -b :8080 -w 2 main:app

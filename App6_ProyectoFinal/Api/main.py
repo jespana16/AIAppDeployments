@@ -21,6 +21,9 @@ BATCH_SIZE = 64
 EPOCHS = 30
 IMAGES_PATH = "Flicker8k_Dataset"
 AUTOTUNE = tf.data.AUTOTUNE
+tokens = "Flickr8k.token.txt"
+weights = 'modelo_image_captioning.h5'
+sample_img = "Prueba.png"
 
 def get_cnn_model():
     base_model = efficientnet.EfficientNetB0(input_shape=(*IMAGE_SIZE, 3), include_top=False, weights="imagenet",)
@@ -112,9 +115,7 @@ class TransformerDecoderBlock(layers.Layer):
             combined_mask = tf.cast(mask[:, tf.newaxis, :], dtype=tf.int32)
             combined_mask = tf.minimum(combined_mask, causal_mask)
 
-        attention_output_1 = self.attention_1(
-            query=inputs, value=inputs, key=inputs, attention_mask=combined_mask
-        )
+        attention_output_1 = self.attention_1(query=inputs, value=inputs, key=inputs, attention_mask=combined_mask)
         out_1 = self.layernorm_1(inputs + attention_output_1)
 
         attention_output_2 = self.attention_2(
@@ -147,9 +148,7 @@ class TransformerDecoderBlock(layers.Layer):
 
 
 class ImageCaptioningModel(keras.Model):
-    def __init__(
-        self, cnn_model, encoder, decoder, num_captions_per_image=5,
-    ):
+    def __init__(self, cnn_model, encoder, decoder, num_captions_per_image=5,):
         super().__init__()
         self.cnn_model = cnn_model
         self.encoder = encoder
@@ -195,9 +194,7 @@ class ImageCaptioningModel(keras.Model):
 
                 # 5. Pass the encoder outputs, sequence inputs along with
                 # mask to the decoder
-                batch_seq_pred = self.decoder(
-                    batch_seq_inp, encoder_out, training=training, mask=mask
-                )
+                batch_seq_pred = self.decoder(batch_seq_inp, encoder_out, training=training, mask=mask)
 
                 # 6. Calculate loss and accuracy
                 loss = self.calculate_loss(batch_seq_true, batch_seq_pred, mask)
@@ -208,9 +205,7 @@ class ImageCaptioningModel(keras.Model):
                 batch_acc += acc
 
             # 8. Get the list of all the trainable weights
-            train_vars = (
-                self.encoder.trainable_variables + self.decoder.trainable_variables
-            )
+            train_vars = (self.encoder.trainable_variables + self.decoder.trainable_variables)
 
             # 9. Get the gradients
             grads = tape.gradient(loss, train_vars)
@@ -245,16 +240,13 @@ def read_image(img_path, size=IMAGE_SIZE):
     img = tf.image.convert_image_dtype(img, tf.float32)
     return img
 
+def read_image_load(img, size=IMAGE_SIZE):
+    img = tf.image.decode_jpeg(img, channels=3)
+    img = tf.image.resize(img, IMAGE_SIZE)
+    img = tf.image.convert_image_dtype(img, tf.float32)
+    return img
+
 def generate_caption(new_model, sample_img, max_decoded_sentence_length, index_lookup):
-    # Select a random image from the validation dataset
-    # sample_img = np.random.choice(valid_images)
-
-    # Read the image from the disk
-    sample_img = read_image(sample_img)
-    img = sample_img.numpy().astype(np.uint8)
-    # plt.imshow(img)
-    # plt.show()
-
     # Pass the image to the CNN
     img = tf.expand_dims(sample_img, 0)
     img = new_model.cnn_model(img)
@@ -267,9 +259,7 @@ def generate_caption(new_model, sample_img, max_decoded_sentence_length, index_l
     for i in range(max_decoded_sentence_length):
         tokenized_caption = vectorization([decoded_caption])[:, :-1]
         mask = tf.math.not_equal(tokenized_caption, 0)
-        predictions = new_model.decoder(
-            tokenized_caption, encoded_img, training=False, mask=mask
-        )
+        predictions = new_model.decoder(tokenized_caption, encoded_img, training=False, mask=mask)
         sampled_token_index = np.argmax(predictions[0, i, :])
         sampled_token = index_lookup[sampled_token_index]
         if sampled_token == " <end>":
@@ -307,7 +297,7 @@ def load_captions_data(filename):
         return caption_mapping, text_data
 
 # Load the dataset
-captions_mapping, text_data = load_captions_data("static/Flickr8k.token.txt")
+captions_mapping, text_data = load_captions_data(tokens)
 
 def custom_standardization(input_string):
     lowercase = tf.strings.lower(input_string)
@@ -330,37 +320,37 @@ encoder = TransformerEncoderBlock(embed_dim=EMBED_DIM, dense_dim=FF_DIM, num_hea
 decoder = TransformerDecoderBlock(embed_dim=EMBED_DIM, ff_dim=FF_DIM, num_heads=NUM_HEADS)
 caption_model = ImageCaptioningModel(cnn_model=cnn_model, encoder=encoder, decoder=decoder)
 
-rutapesos=''
 
-@app.route('/predict_imageCaptioning')
-def predict():
-    post_params = request.form
-    
-    #Carga de arquitectura del modelo
-    new_model = ImageCaptioningModel(cnn_model=cnn_model, encoder=encoder, decoder=decoder)
+#Carga de arquitectura del modelo
+new_model = ImageCaptioningModel(cnn_model=cnn_model, encoder=encoder, decoder=decoder)
 
-    #Carga Optimizador del modelo
-    cross_entropy = keras.losses.SparseCategoricalCrossentropy(from_logits=True, reduction="none")
-    new_model.compile(optimizer=keras.optimizers.Adam(), loss=cross_entropy)
+#Carga Optimizador del modelo
+cross_entropy = keras.losses.SparseCategoricalCrossentropy(from_logits=True, reduction="none")
+new_model.compile(optimizer=keras.optimizers.Adam(), loss=cross_entropy)
 
-    #Construccion del modelo y cargue de pesos
-    new_model.built = True
-    new_model.load_weights('static/modelo_image_captioning.h5')
-
+try:
     vocab = vectorization.get_vocabulary()
     index_lookup = dict(zip(range(len(vocab)), vocab))
     max_decoded_sentence_length = SEQ_LENGTH - 1
+    sample_img = read_image(sample_img)
+    sample_img = sample_img.numpy().astype(np.uint8)
+    decoded_caption = generate_caption(new_model, sample_img, max_decoded_sentence_length, index_lookup)
+except:
+    print("Error de prueba inicial") 
 
-    sample_img = "static/Prueba.png"
+#Construccion del modelo y cargue de pesos
+new_model.built = True
+new_model.load_weights(weights)
+
+
+@app.route('/predict_imageCaptioning', methods=["POST"])
+def predict():
+    file = request.files['img'].read()
+    sample_img = read_image_load(file)
     decoded_caption = generate_caption(new_model, sample_img, max_decoded_sentence_length, index_lookup)
 
-    response = make_response("Hi", 200)
-    print('\nvocab: ', vocab)
-    print('max_decoded_sentence_length: ', max_decoded_sentence_length)
-    print('decoded_caption: ', decoded_caption)
-    response.mimetype = "text/plain"
+    response = jsonify({"title":decoded_caption})
     return response
-
 
 if __name__ == '__main__':
     app.run(host="127.0.0.1", port=8080, debug=True)
